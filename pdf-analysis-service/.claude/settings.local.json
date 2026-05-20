@@ -1,0 +1,16 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -m py_compile config/settings.py core/models.py core/interfaces.py core/parser.py validators/font_validator.py services/validation_service.py main.py)",
+      "Bash(python -m py_compile config/settings.py core/models.py validators/font_validator.py)",
+      "Bash(python -m py_compile config/settings.py validators/font_validator.py)",
+      "Bash(.venv/bin/python main.py test1.pdf)",
+      "Bash(.venv/bin/python *)",
+      "Bash(/Users/user/Desktop/pdf-analysis-service/.venv/bin/python3 *)",
+      "Bash(pip install *)",
+      "Bash(.venv/bin/uvicorn api:app --port 8765)",
+      "Bash(curl -s http://localhost:8765/health)",
+      "Bash(python3 -m json.tool)"
+    ]
+  }
+}

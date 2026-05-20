@@ -1,0 +1,138 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+/* shadcn — base color: blue. Сдержанный сине-голубой цветокор без violet/indigo. */
+@layer base {
+  :root {
+    --background: 210 25% 98%;
+    --foreground: 215 28% 17%;
+    --card: 0 0% 100%;
+    --card-foreground: 215 28% 17%;
+    --popover: 0 0% 100%;
+    --popover-foreground: 215 28% 17%;
+    --primary: 213 80% 48%;
+    --primary-foreground: 210 40% 98%;
+    --secondary: 210 40% 96%;
+    --secondary-foreground: 215 28% 17%;
+    --muted: 210 30% 96%;
+    --muted-foreground: 215 16% 47%;
+    --accent: 205 85% 94%;
+    --accent-foreground: 213 80% 32%;
+    --destructive: 0 72% 51%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 213 25% 89%;
+    --input: 213 25% 89%;
+    --ring: 213 80% 48%;
+    --radius: 0.75rem;
+
+    /* Тонкий blue→cyan акцент (используется редко, для статус-полосок) */
+    --gradient-primary: linear-gradient(
+      135deg,
+      hsl(213 80% 50%) 0%,
+      hsl(195 85% 48%) 100%
+    );
+  }
+
+  .dark {
+    --background: 215 35% 9%;
+    --foreground: 210 40% 98%;
+    --card: 215 32% 12%;
+    --card-foreground: 210 40% 98%;
+    --popover: 215 32% 12%;
+    --popover-foreground: 210 40% 98%;
+    --primary: 210 90% 65%;
+    --primary-foreground: 215 28% 17%;
+    --secondary: 217 33% 17%;
+    --secondary-foreground: 210 40% 98%;
+    --muted: 217 33% 17%;
+    --muted-foreground: 215 20% 65%;
+    --accent: 215 30% 22%;
+    --accent-foreground: 210 40% 98%;
+    --destructive: 0 63% 45%;
+    --destructive-foreground: 210 40% 98%;
+    --border: 215 30% 22%;
+    --input: 215 30% 22%;
+    --ring: 210 90% 65%;
+  }
+}
+
+@layer base {
+  * {
+    @apply border-border;
+    /* Firefox */
+    scrollbar-width: none;
+    /* Старый Edge / IE */
+    -ms-overflow-style: none;
+  }
+  /* WebKit (Chrome, Safari, новый Edge) */
+  *::-webkit-scrollbar {
+    display: none;
+    width: 0;
+    height: 0;
+  }
+  html,
+  body {
+    height: 100%;
+  }
+  body {
+    @apply text-foreground antialiased;
+    font-feature-settings: "rlig" 1, "calt" 1, "ss01" 1;
+    background:
+      radial-gradient(at 50% 0%, hsl(210 85% 95%) 0px, transparent 55%),
+      hsl(var(--background));
+    background-attachment: fixed;
+  }
+}
+
+@layer utilities {
+  .gradient-primary {
+    background-image: var(--gradient-primary);
+  }
+  .text-gradient {
+    background-image: var(--gradient-primary);
+    -webkit-background-clip: text;
+    background-clip: text;
+    color: transparent;
+  }
+  .glass {
+    @apply border border-white/60 bg-white/80 backdrop-blur-xl;
+  }
+  /* Тонкие, мягкие тени поверх обычных shadcn */
+  .shadow-soft {
+    box-shadow:
+      0 1px 2px hsl(213 30% 20% / 0.04),
+      0 4px 16px -4px hsl(213 30% 20% / 0.08);
+  }
+  .shadow-soft-lg {
+    box-shadow:
+      0 1px 2px hsl(213 30% 20% / 0.05),
+      0 12px 32px -8px hsl(213 30% 20% / 0.12);
+  }
+
+  /*
+   * Плавное раскрытие выпадающих секций.
+   * Идея: внешний grid анимирует grid-template-rows 0fr → 1fr,
+   * внутренний div с overflow-hidden обрезает контент во время перехода.
+   * Использование:
+   *   <div className="collapsible" data-open={open}>
+   *     <div className="collapsible-inner">…content…</div>
+   *   </div>
+   */
+  .collapsible {
+    display: grid;
+    grid-template-rows: 0fr;
+    transition:
+      grid-template-rows 300ms cubic-bezier(0.4, 0, 0.2, 1),
+      opacity 200ms ease;
+    opacity: 0;
+  }
+  .collapsible[data-open="true"] {
+    grid-template-rows: 1fr;
+    opacity: 1;
+  }
+  .collapsible-inner {
+    overflow: hidden;
+    min-height: 0;
+  }
+}

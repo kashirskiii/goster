@@ -1,0 +1,46 @@
+{
+  "allowed_fonts": [
+    {
+      "name": "TimesNewRomanPSMT",
+      "size": 14,
+      "color": [0, 0, 0],
+      "size_tolerance": 0.5,
+      "color_tolerance": 35,
+      "description": "Times New Roman, 14pt, чёрный"
+    },
+    {
+      "name": "TimesNewRomanPS-BoldMT",
+      "size": 14,
+      "color": [0, 0, 0],
+      "size_tolerance": 0.5,
+      "color_tolerance": 35,
+      "description": "Times New Roman Bold, 14pt, чёрный"
+    },
+    {
+      "name": "ArialMT",
+      "size": 12,
+      "color": [0, 0, 0],
+      "description": "Arial, 12pt, чёрный"
+    }
+  ],
+  "ignore_fonts": [
+    "SymbolMT"
+  ],
+  "validators": {
+    "page_number": true,
+    "figure_caption": true,
+    "toc": true,
+    "structural_heading": true,
+    "margin": true,
+    "list": true
+  },
+  "margins": {
+    "left_mm": 30,
+    "right_mm": 15,
+    "top_mm": 20,
+    "bottom_mm": 20,
+    "tolerance_mm": 2.5,
+    "ignore_top_band_mm": 15,
+    "ignore_bottom_band_mm": 15
+  }
+}
