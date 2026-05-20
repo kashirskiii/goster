@@ -1,0 +1,302 @@
+generator client {
+  provider = "prisma-client-js"
+}
+
+datasource db {
+  provider = "postgresql"
+  url      = env("DATABASE_URL")
+}
+
+// ══════════════════════════════════════════════════════════════
+// ENUMS
+// ══════════════════════════════════════════════════════════════
+
+enum UserRole {
+  student
+  teacher
+}
+
+enum DialogStatus {
+  open
+  approved
+  rejected
+  closed
+}
+
+enum CheckStatus {
+  pending
+  processing
+  done
+  failed
+}
+
+enum ErrorSeverity {
+  error
+  warning
+}
+
+enum ApprovalType {
+  system
+  teacher
+}
+
+enum ApprovalStatus {
+  pending
+  approved
+  rejected
+}
+
+enum MessageAuthorType {
+  student
+  teacher
+  system
+}
+
+enum EventType {
+  dialog_created
+  submission_added
+  check_started
+  check_completed
+  check_failed
+  approval_updated
+  dialog_closed
+}
+
+// ══════════════════════════════════════════════════════════════
+// USERS
+// ══════════════════════════════════════════════════════════════
+
+model User {
+  id           String   @id @default(uuid()) @db.Uuid
+  email        String   @unique
+  lastName     String   @map("last_name")
+  firstName    String   @map("first_name")
+  middleName   String?  @map("middle_name")
+  role         UserRole
+  passwordHash String   @map("password_hash")
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  studentDialogs Dialog[]       @relation("StudentDialogs")
+  teacherDialogs Dialog[]       @relation("TeacherDialogs")
+  messages       Message[]
+  events         Event[]
+  refreshTokens  RefreshToken[]
+  approvals      Approval[]
+
+  @@map("users")
+}
+
+// ══════════════════════════════════════════════════════════════
+// REFRESH TOKENS
+// ══════════════════════════════════════════════════════════════
+
+model RefreshToken {
+  id        String    @id @default(uuid()) @db.Uuid
+  userId    String    @map("user_id") @db.Uuid
+  tokenHash String    @map("token_hash")
+  expiresAt DateTime  @map("expires_at") @db.Timestamptz
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+  revokedAt DateTime? @map("revoked_at") @db.Timestamptz
+
+  user User @relation(fields: [userId], references: [id])
+
+  @@map("refresh_tokens")
+}
+
+// ══════════════════════════════════════════════════════════════
+// DIALOGS  (≈ Merge Request thread)
+// ══════════════════════════════════════════════════════════════
+
+model Dialog {
+  id        String       @id @default(uuid()) @db.Uuid
+  studentId String       @map("student_id") @db.Uuid
+  teacherId String       @map("teacher_id") @db.Uuid
+  title     String
+  status    DialogStatus @default(open)
+  // JSON-конфиг проверок: копия preset.config на момент создания, позже
+  // редактируется преподавателем на странице диалога. Шлётся в pdf-analysis
+  // на каждый прогон submission. Nullable только для совместимости со
+  // старыми диалогами, созданными до фичи пресетов — новые всегда с config.
+  config    Json?
+  presetId  String?      @map("preset_id") @db.Uuid
+  createdAt DateTime     @default(now()) @map("created_at") @db.Timestamptz
+
+  student     User         @relation("StudentDialogs", fields: [studentId], references: [id])
+  teacher     User         @relation("TeacherDialogs", fields: [teacherId], references: [id])
+  preset      GostPreset?  @relation(fields: [presetId], references: [id])
+  submissions Submission[]
+  messages    Message[]
+  events      Event[]
+
+  @@index([studentId])
+  @@index([teacherId])
+  @@map("dialogs")
+}
+
+// ══════════════════════════════════════════════════════════════
+// GOST PRESETS
+// ══════════════════════════════════════════════════════════════
+
+model GostPreset {
+  id          String   @id @default(uuid()) @db.Uuid
+  code        String   @unique
+  name        String
+  description String?
+  config      Json
+  createdAt   DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  dialogs Dialog[]
+
+  @@map("gost_presets")
+}
+
+// ══════════════════════════════════════════════════════════════
+// SUBMISSIONS  (≈ pipeline run / новая ревизия работы)
+// ══════════════════════════════════════════════════════════════
+
+model Submission {
+  id        String   @id @default(uuid()) @db.Uuid
+  dialogId  String   @map("dialog_id") @db.Uuid
+  version   Int
+  comment   String?
+  createdAt DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  dialog    Dialog     @relation(fields: [dialogId], references: [id])
+  files     File[]
+  check     Check?
+  approvals Approval[]
+
+  @@unique([dialogId, version])
+  @@map("submissions")
+}
+
+// ══════════════════════════════════════════════════════════════
+// FILES
+// ══════════════════════════════════════════════════════════════
+
+model File {
+  id           String   @id @default(uuid()) @db.Uuid
+  submissionId String   @map("submission_id") @db.Uuid
+  originalName String   @map("original_name")
+  path         String
+  mimeType     String?  @map("mime_type")
+  size         Int?
+  createdAt    DateTime @default(now()) @map("created_at") @db.Timestamptz
+
+  submission Submission @relation(fields: [submissionId], references: [id])
+
+  @@map("files")
+}
+
+// ══════════════════════════════════════════════════════════════
+// CHECKS  (≈ pipeline job — автоматическая ГОСТ-проверка)
+// ══════════════════════════════════════════════════════════════
+
+model Check {
+  id            String      @id @default(uuid()) @db.Uuid
+  submissionId  String      @unique @map("submission_id") @db.Uuid
+  status        CheckStatus @default(pending)
+  pageCount     Int?        @map("page_count")
+  errorCount    Int         @default(0) @map("error_count")
+  warningCount  Int         @default(0) @map("warning_count")
+  // Полный JSON-отчёт от pdf-analysis-service
+  report        Json?
+  // Снимок конфига, отправленного в pdf-analysis для этого прогона —
+  // чтобы старые отчёты оставались воспроизводимыми, даже если препод
+  // потом подкрутит dialog.config.
+  configSnapshot Json?      @map("config_snapshot")
+  // Текст внутреннего сбоя пайплайна (не путать с ошибками документа)
+  failureReason String?     @map("failure_reason")
+  startedAt     DateTime?   @map("started_at") @db.Timestamptz
+  finishedAt    DateTime?   @map("finished_at") @db.Timestamptz
+  createdAt     DateTime    @default(now()) @map("created_at") @db.Timestamptz
+
+  submission Submission   @relation(fields: [submissionId], references: [id])
+  errors     CheckError[]
+
+  @@map("checks")
+}
+
+// ══════════════════════════════════════════════════════════════
+// CHECK ERRORS  (нарушения, найденные валидаторами)
+// ══════════════════════════════════════════════════════════════
+
+model CheckError {
+  id           String        @id @default(uuid()) @db.Uuid
+  checkId      String        @map("check_id") @db.Uuid
+  validator    String
+  code         String
+  severity     ErrorSeverity @default(error)
+  page         Int?
+  textPreview  String?       @map("text_preview")
+  expected     String?
+  actual       String?
+  message      String
+  bbox         Json?
+  createdAt    DateTime      @default(now()) @map("created_at") @db.Timestamptz
+
+  check Check @relation(fields: [checkId], references: [id])
+
+  @@index([checkId])
+  @@map("check_errors")
+}
+
+// ══════════════════════════════════════════════════════════════
+// MESSAGES
+// ══════════════════════════════════════════════════════════════
+
+model Message {
+  id         String            @id @default(uuid()) @db.Uuid
+  dialogId   String            @map("dialog_id") @db.Uuid
+  authorId   String?           @map("author_id") @db.Uuid
+  authorType MessageAuthorType @map("author_type")
+  content    String
+  createdAt  DateTime          @default(now()) @map("created_at") @db.Timestamptz
+
+  dialog Dialog @relation(fields: [dialogId], references: [id])
+  author User?  @relation(fields: [authorId], references: [id])
+
+  @@index([dialogId])
+  @@map("messages")
+}
+
+// ══════════════════════════════════════════════════════════════
+// APPROVALS  (≈ MR approvals: автоматический шлюз + ручной шлюз)
+// ══════════════════════════════════════════════════════════════
+
+model Approval {
+  id           String         @id @default(uuid()) @db.Uuid
+  submissionId String         @map("submission_id") @db.Uuid
+  type         ApprovalType
+  status       ApprovalStatus @default(pending)
+  // null для system, userId преподавателя для teacher
+  decidedById  String?        @map("decided_by_id") @db.Uuid
+  comment      String?
+  createdAt    DateTime       @default(now()) @map("created_at") @db.Timestamptz
+  updatedAt    DateTime       @updatedAt @map("updated_at") @db.Timestamptz
+
+  submission Submission @relation(fields: [submissionId], references: [id])
+  decidedBy  User?      @relation(fields: [decidedById], references: [id])
+
+  @@unique([submissionId, type])
+  @@map("approvals")
+}
+
+// ══════════════════════════════════════════════════════════════
+// EVENTS
+// ══════════════════════════════════════════════════════════════
+
+model Event {
+  id        String    @id @default(uuid()) @db.Uuid
+  dialogId  String?   @map("dialog_id") @db.Uuid
+  actorId   String?   @map("actor_id") @db.Uuid
+  type      EventType
+  payload   Json      @default("{}")
+  createdAt DateTime  @default(now()) @map("created_at") @db.Timestamptz
+
+  dialog Dialog? @relation(fields: [dialogId], references: [id])
+  actor  User?   @relation(fields: [actorId], references: [id])
+
+  @@index([dialogId])
+  @@map("events")
+}

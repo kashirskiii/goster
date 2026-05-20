@@ -1,0 +1,307 @@
+openapi: 3.0.0
+info:
+  title: Analysis API
+  description: API системы проверки студенческих работ на соответствие ГОСТ
+  version: '1.0'
+servers:
+  - url: http://localhost:3000
+    description: Local development
+paths:
+  /api:
+    get:
+      operationId: AppController_getHello
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                type: string
+                example: Hello from Analysis API!
+      summary: Hello world
+      tags:
+        - App
+  /api/health:
+    get:
+      description: Возвращает статус сервиса и текущее время сервера
+      operationId: AppController_getHealth
+      parameters: []
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/HealthResponseDto'
+      summary: Health check
+      tags:
+        - App
+  /api/auth/login:
+    post:
+      description: Возвращает пару access/refresh токенов
+      operationId: AuthController_login
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginDto'
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokensResponseDto'
+        '401':
+          description: Неверный email или пароль
+      summary: Вход в систему
+      tags:
+        - Auth
+  /api/auth/refresh:
+    post:
+      description: Принимает refresh token, возвращает новую пару. Старый токен аннулируется (ротация)
+      operationId: AuthController_refresh
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenDto'
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/AuthTokensResponseDto'
+        '401':
+          description: Токен недействителен, истёк или уже был использован
+      summary: Обновление токенов
+      tags:
+        - Auth
+  /api/auth/logout:
+    post:
+      description: Аннулирует переданный refresh token. Требует валидный access token в заголовке Authorization
+      operationId: AuthController_logout
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/RefreshTokenDto'
+      responses:
+        '200':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LogoutResponseDto'
+        '401':
+          description: Access token отсутствует или недействителен, либо refresh token не найден
+      security:
+        - access-token: []
+      summary: Выход из системы
+      tags:
+        - Auth
+  /api/dialogs:
+    post:
+      description: >-
+        Студент создаёт диалог с преподавателем и загружает первую версию работы.
+        Одновременно создаётся Submission v1 и запись File с путём к сохранённому файлу.
+      operationId: DialogsController_create
+      parameters: []
+      requestBody:
+        required: true
+        content:
+          multipart/form-data:
+            schema:
+              type: object
+              required:
+                - teacherId
+                - title
+                - file
+              properties:
+                teacherId:
+                  type: string
+                  format: uuid
+                title:
+                  type: string
+                  example: Курсовая работа по алгоритмам
+                comment:
+                  type: string
+                  example: Первая версия
+                file:
+                  type: string
+                  format: binary
+      responses:
+        '201':
+          description: ''
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/CreateDialogResponseDto'
+        '401':
+          description: Требуется авторизация
+      security:
+        - access-token: []
+      summary: Создать диалог
+      tags:
+        - Dialogs
+components:
+  securitySchemes:
+    access-token:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+  schemas:
+    HealthResponseDto:
+      type: object
+      properties:
+        status:
+          type: string
+          example: ok
+        timestamp:
+          type: string
+          format: date-time
+          example: '2026-05-03T14:00:00.000Z'
+      required:
+        - status
+        - timestamp
+    LogoutResponseDto:
+      type: object
+      properties:
+        message:
+          type: string
+          example: Logged out successfully
+      required:
+        - message
+    LoginDto:
+      type: object
+      properties:
+        email:
+          type: string
+          example: teacher@example.com
+        password:
+          type: string
+          example: teacher-password
+      required:
+        - email
+        - password
+    AuthTokensResponseDto:
+      type: object
+      properties:
+        accessToken:
+          type: string
+          description: JWT access token (15m)
+        refreshToken:
+          type: string
+          description: JWT refresh token (7d)
+      required:
+        - accessToken
+        - refreshToken
+    RefreshTokenDto:
+      type: object
+      properties:
+        refreshToken:
+          type: string
+          description: Refresh token, полученный при login или refresh
+      required:
+        - refreshToken
+    DialogDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        studentId:
+          type: string
+          format: uuid
+        teacherId:
+          type: string
+          format: uuid
+        title:
+          type: string
+          example: Курсовая работа по алгоритмам
+        status:
+          type: string
+          enum:
+            - open
+            - approved
+            - rejected
+            - closed
+          example: open
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - studentId
+        - teacherId
+        - title
+        - status
+        - createdAt
+    DialogSubmissionDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        dialogId:
+          type: string
+          format: uuid
+        version:
+          type: number
+          example: 1
+        comment:
+          type: string
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - dialogId
+        - version
+        - createdAt
+    DialogFileDto:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        originalName:
+          type: string
+        path:
+          type: string
+          description: 'Относительный путь для получения файла: GET /api/files/:path'
+        mimeType:
+          type: string
+          example: application/pdf
+        size:
+          type: number
+          description: Размер в байтах
+        createdAt:
+          type: string
+          format: date-time
+      required:
+        - id
+        - originalName
+        - path
+        - createdAt
+    CreateDialogResponseDto:
+      type: object
+      properties:
+        dialog:
+          $ref: '#/components/schemas/DialogDto'
+        submission:
+          $ref: '#/components/schemas/DialogSubmissionDto'
+        file:
+          $ref: '#/components/schemas/DialogFileDto'
+      required:
+        - dialog
+        - submission
+        - file
